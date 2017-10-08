@@ -182,9 +182,19 @@ func serverFromSSR(uri string) *SSRServer {
 		Obfs:     obfs,
 		Group:    "",
 	}
-	params := bytes.Split(parts[1], []byte("$"))
+
+	if len(parts) < 2 {
+		return ssr
+	}
+
+	fmt.Printf("decode params[%s]\n", string(parts[1]))
+	params := bytes.Split(parts[1], []byte("&"))
 	for _, param := range params {
 		pairs := bytes.Split(param, []byte{'='})
+		if len(pairs) != 2 || len(pairs[0]) <= 0 || len(pairs[1]) <= 0 {
+			fmt.Printf("can't decode pair[%s]\n", string(param))
+			continue
+		}
 		key := string(pairs[0])
 		value, _ := base64.URLEncoding.DecodeString(string(pairs[1]))
 		val := string(value)
