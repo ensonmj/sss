@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/skip2/go-qrcode"
 	"github.com/spf13/cobra"
 )
 
@@ -41,7 +42,8 @@ to quickly create a Cobra application.`,
 }
 
 var (
-	fFilePath string
+	fFilePath   string
+	fQrFilePath string
 )
 
 func init() {
@@ -56,14 +58,18 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	flags := decodeCmd.Flags()
-	flags.StringVarP(&fFilePath, "file", "f", "shadowsock.json", "File to save json")
+	flags.StringVarP(&fFilePath, "file", "f", "shadowsock", "File to save json")
+	flags.StringVarP(&fQrFilePath, "qrfile", "q", "qr", "File to save qrcode png")
 
 }
 
 func decodeMain(cmd *cobra.Command, args []string) {
-	f, _ := os.Create(fFilePath)
-	defer f.Close()
-	for _, uri := range args {
+	for i, uri := range args {
+		err := qrcode.WriteFile(uri, qrcode.Medium, 256, fmt.Sprintf("%s-%d.png", fQrFilePath, i))
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 		var data []byte
 		// var server string
 		if strings.HasPrefix(uri, "ss://") {
@@ -76,7 +82,14 @@ func decodeMain(cmd *cobra.Command, args []string) {
 			// server = ssr.Server
 		}
 		fmt.Printf(string(data))
+
+		f, err := os.Create(fmt.Sprintf("%s-%d.json", fFilePath, i))
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 		f.Write(data)
+		f.Close()
 	}
 }
 
@@ -120,7 +133,7 @@ func serverFromSS(uri string) *SSServer {
 	detailReg := regexp.MustCompile(detailPat)
 
 	match := uriReg.FindStringSubmatch(uri)
-	decodeBytes, err := base64.StdEncoding.DecodeString(match[1])
+	decodeBytes, err := base64.RawStdEncoding.DecodeString(match[1])
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -146,14 +159,14 @@ func serverFromSSR(uri string) *SSRServer {
 	uriReg := regexp.MustCompile(uriPat)
 	match := uriReg.FindStringSubmatch(uri)
 
-	data, err := base64.StdEncoding.DecodeString(match[1])
+	data, err := base64.RawStdEncoding.DecodeString(match[1])
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	parts := bytes.Split(data, []byte("/?"))
 	detail := bytes.Split(parts[0], []byte(":"))
-	password, _ := base64.StdEncoding.DecodeString(string(detail[5]))
+	password, _ := base64.RawStdEncoding.DecodeString(string(detail[5]))
 	server_port, _ := strconv.Atoi(string(detail[1]))
 
 	ss := SSServer{
@@ -187,7 +200,6 @@ func serverFromSSR(uri string) *SSRServer {
 		return ssr
 	}
 
-	fmt.Printf("decode params[%s]\n", string(parts[1]))
 	params := bytes.Split(parts[1], []byte("&"))
 	for _, param := range params {
 		pairs := bytes.Split(param, []byte{'='})
@@ -196,7 +208,7 @@ func serverFromSSR(uri string) *SSRServer {
 			continue
 		}
 		key := string(pairs[0])
-		value, _ := base64.URLEncoding.DecodeString(string(pairs[1]))
+		value, _ := base64.RawURLEncoding.DecodeString(string(pairs[1]))
 		val := string(value)
 		switch key {
 		case "obfsparam":
